@@ -6,6 +6,7 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);node_modules/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="src/mparsec.fs" />
     <Compile Include="src/App.fs" />
   </ItemGroup>
   <ItemGroup>
