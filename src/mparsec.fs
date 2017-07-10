@@ -21,6 +21,7 @@ let any (a: Parser<'a> list) txt =
     any a
 
 let anyChar = ['A'..'Z'] @ ['a'..'z'] |> List.map pChar |> any
+let anyNumber = ['0'..'9'] |> List.map pChar |> any
 
 let all (a:Parser<'a>) (txt:string) =
     let rec all (a:Parser<'a>) (txt:string) agg =
@@ -58,6 +59,19 @@ let ref<'a> () =
     let mutable (b:Parser<'a>) = Unchecked.defaultof<_>
     (fun x-> b<-x), (fun txt -> b txt)
 
-let f = betweenChar '(' (sepByChar ',' (spaces >-> anyStr <-< spaces)) ')'
+let pfloat = 
+    let parse (p:char list) = p |> Array.ofList |> System.String |> System.Convert.ToDouble
+    choice [
+        all anyNumber <-< pChar '.' <-> all anyNumber ==> fun (a,b) -> a @ ['.'] @ b |> parse 
+        all anyNumber <-< pChar '.' ==> parse]
 
-let parse txt = f txt
+let pint = 
+    let parse (p:char list) = p |> Array.ofList |> System.String |> System.Convert.ToInt64
+    all anyNumber ==> parse
+
+let pbool = 
+    choice [
+        pString "true" ==> fun _ -> true
+        pString "false" ==> fun _ -> false ]
+
+

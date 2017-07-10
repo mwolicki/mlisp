@@ -1,6 +1,6 @@
 module calc
 
-open mparsec
+open parser
 open Fable.Core
 open Fable.Core.JsInterop
 open Fable.Import
