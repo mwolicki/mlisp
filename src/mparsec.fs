@@ -1,4 +1,5 @@
 module mparsec
+
 type Result<'u> = ('u * string) option
 type Parser<'u> = string -> Result<'u>
 
@@ -36,7 +37,7 @@ let choice (a:Parser<'a> list) txt=
     match Seq.map (fun f->f txt) a |> Seq.tryFind (Option.isSome) with
     | Some (Some s) -> Some s
     | _ -> None
-
+let rec attempt (a:Parser<'a>) txt = match a txt with Some (_, "") as s -> s | _ -> None
 let (>->) (a:Parser<_>) (b:Parser<_>) = a >> Option.bind (snd>>b)
 let (<-<) (a:Parser<_>) (b:Parser<_>) = 
     a >> Option.bind (fun (v1, txt) -> b txt |> Option.map (fun (_, txt) -> v1, txt))
@@ -55,9 +56,10 @@ let anyStr = all anyChar ==> (Array.ofList >> System.String)
 let spaces1 = all (pChar ' ')
 let spaces txt = all (pChar ' ') txt |> Option.defaultValue ([], txt) |> Some
 
-let ref<'a> () =
+let refl<'a> () =
     let mutable (b:Parser<'a>) = Unchecked.defaultof<_>
-    (fun x-> b<-x), (fun txt -> b txt)
+    let c = ref 0;
+    (fun x-> b<-x), (fun txt -> c:=!c+1; if !c < 1000 then let r = b txt in c:= !c-1; r else None)
 
 let pfloat = 
     let parse (p:char list) = p |> Array.ofList |> System.String |> System.Convert.ToDouble
@@ -73,5 +75,3 @@ let pbool =
     choice [
         pString "true" ==> fun _ -> true
         pString "false" ==> fun _ -> false ]
-
-
