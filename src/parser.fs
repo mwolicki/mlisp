@@ -15,27 +15,29 @@ open AST
 let exprAction, expr = refl<Expr> ()
 
 let mathExpr ch op = betweenChar '(' (pChar ch <-< spaces1 >-> sepBy spaces1 expr) ')' ==> op
-let addExpr = mathExpr '+' Add
-let mulExpr = mathExpr '*' Mul
-let divExpr = mathExpr '/' Div
-let subExpr = mathExpr '-' Sub
+let addExpr = mathExpr '+' Add  >~> "addExpr"
+let mulExpr = mathExpr '*' Mul  >~> "mulExpr"
+let divExpr = mathExpr '/' Div  >~> "divExpr"
+let subExpr = mathExpr '-' Sub  >~> "subExpr"
 
 choice [ 
     pfloat ==> ENumber
-    pChar '"' >-> anyStr <-< pChar '"' ==> EString
-    pChar '\'' >-> anyStr <-< pChar '\'' ==> EString
-    addExpr    
-    mulExpr    
+    pChar '"' >-> anyStr <-< pChar '"' ==> EString >~> "EString"
+    pChar '\'' >-> anyStr <-< pChar '\'' ==> EString >~> "EString"
+    addExpr
+    mulExpr
     divExpr    
     subExpr    
 ] |> exprAction
 
-sepBy spaces1 (pChar 'a') <!!> "a    a"
 
 
-addExpr <!!> "(+ 1 2)"
+addExpr <!!> "(+ 1 2 3)"
+
+pfloat <!!> "1"
 
 
+(pfloat <-< pChar ' ') <!!> "1 2)"
 
 type RuntimeValue =
 | RNumber of float
