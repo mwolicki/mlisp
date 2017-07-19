@@ -1,43 +1,38 @@
 module parser
 open mparsec
 
+type Id = Id of string
+
 module AST =
     type Expr =
-    | Add of Expr list
-    | Mul of Expr list
-    | Div of Expr list
-    | Sub of Expr list
+    | EFunCall of Id * Expr list
     | EString of string
     | ENumber of float
+    | EId of Id
+    | EList of Expr list
+    | EQuotedList of Expr list
 
 open AST
 
 let exprAction, expr = refl<Expr> ()
 
-let mathExpr ch op = betweenChar '(' (pChar ch <-< spaces1 >-> sepBy spaces1 expr) ')' ==> op
-let addExpr = mathExpr '+' Add  >~> "addExpr"
-let mulExpr = mathExpr '*' Mul  >~> "mulExpr"
-let divExpr = mathExpr '/' Div  >~> "divExpr"
-let subExpr = mathExpr '-' Sub  >~> "subExpr"
+let funCall = betweenChar '(' (anyStr <-< spaces1 <-> sepBy spaces1 expr) ')' 
+                ==> fun (funName, expr) -> EFunCall(Id funName, expr)
+
+let quotedListCall = betweenStr "'(" (sepBy spaces1 expr) ")" 
+                        ==> EQuotedList
+
 
 choice [ 
     pfloat ==> ENumber
     pChar '"' >-> anyStr <-< pChar '"' ==> EString >~> "EString"
-    pChar '\'' >-> anyStr <-< pChar '\'' ==> EString >~> "EString"
-    addExpr
-    mulExpr
-    divExpr    
-    subExpr    
+    quotedListCall
+    funCall
+    anyStr ==> (Id >> EId) >~> "EId"
 ] |> exprAction
 
 
-
-addExpr <!!> "(+ 1 2 3)"
-
-pfloat <!!> "1"
-
-
-(pfloat <-< pChar ' ') <!!> "1 2)"
+expr <!!> """(add '(+ 1 2))"""
 
 type RuntimeValue =
 | RNumber of float
