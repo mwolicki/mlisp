@@ -208,20 +208,3 @@ let pbool =
         pString "false" ==> fun _ -> false ] >~> "pbool"
 
 
-
-type Expr =
-| Add of Expr * Expr
-| Sub of Expr * Expr
-| Num of float
-
-let exprAction, expr = refl<Expr> ()
-
-choice [ 
-    expr <-< pChar '+' <-> expr ==> Add
-    expr <-< pChar '-' <-> expr ==> Sub
-    pfloat ==> Num
-] |> exprAction
-
-
-expr <!!> "1-2+2-3+2"
-
