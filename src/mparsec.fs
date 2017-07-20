@@ -35,7 +35,7 @@ type ParseStatus = {
 type 'a ParsedData =  'a * ParseStatus
 
 [<StructuredFormatDisplay("\"{AsString}\"")>]
-type Result<'u> = 
+type ParserResult<'u> = 
 | Parsed of 'u ParsedData
 | Failed of reason : string * StringEx.StringEx
 with
@@ -46,23 +46,23 @@ with
 
 [<RequireQualifiedAccess>]
 module Result =
-    let isParsed (r:Result<'u>) = match r with Parsed _ -> true | _ -> false
-    let isFailed (r:Result<'u>) = match r with Failed _ -> true | _ -> false
-    let bind (binder:'t ParsedData->Result<'u>) (bind: Result<'t> ) : Result<'u> = 
+    let isParsed (r:ParserResult<'u>) = match r with Parsed _ -> true | _ -> false
+    let isFailed (r:ParserResult<'u>) = match r with Failed _ -> true | _ -> false
+    let bind (binder:'t ParsedData->ParserResult<'u>) (bind: ParserResult<'t> ) : ParserResult<'u> = 
         match bind with 
         | Parsed (v, txt) -> binder (v, txt)
         | Failed (reason, txt) -> Failed (reason, txt)
-    let map (mapper:'t->'u) (v: Result<'t> ) : Result<'u> = 
+    let map (mapper:'t->'u) (v: ParserResult<'t> ) : ParserResult<'u> = 
         match v with 
         | Parsed (v, txt) -> Parsed(mapper v, txt)
         | Failed (reason, txt) -> Failed (reason, txt)
-    let defaultValue (def) (result:Result<'u>)  = 
+    let defaultValue (def) (result:ParserResult<'u>)  = 
         match result with
         | Parsed (v, txt) -> (v, txt)
         | Failed _ -> def
 
 type Parser<'u> = 
-    private { parser: ParseStatus -> Result<'u>; name : string; id:System.Guid }
+    private { parser: ParseStatus -> ParserResult<'u>; name : string; id:System.Guid }
     with member p.f status =
             let call c =
                 let status = { status with Trampoline = Map.add (p.id, status.Text.Position) (c+1uy) status.Trampoline }
@@ -206,5 +206,6 @@ let pbool =
     choice [
         pString "true" ==> fun _ -> true
         pString "false" ==> fun _ -> false ] >~> "pbool"
+
 
 
