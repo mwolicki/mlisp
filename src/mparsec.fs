@@ -112,6 +112,13 @@ let anyChar =
     { name = "anyChar"
       id = System.Guid.NewGuid ()
       parser = fun txt -> (['*'..'z'] |> List.map pChar |> any).f txt }
+
+
+let anyASCII = 
+    { name = "anyASCII"
+      id = System.Guid.NewGuid ()
+      parser = fun txt -> ([char 0 .. char 127] |> List.map pChar |> any).f txt }
+
 let anyNumber = 
     { name = "anyNumber"
       id = System.Guid.NewGuid ()
@@ -179,7 +186,14 @@ let sepByChar sep = sepBy (pChar sep)
 let anyStr = all anyChar ==> (Array.ofList >> System.String)
 
 let spaces1 = all (pChar ' ')
-let spaces txt = (all (pChar ' ')).f txt |> Result.defaultValue ([], txt) |> Some
+let spaces =
+    { name = "spaces" 
+      id = System.Guid.NewGuid ()
+      parser = 
+        fun status -> 
+            match (all (pChar ' ')).f status with
+            | Parsed _ as p -> p
+            | Failed _ -> Parsed ([], status)}
 
 let refl<'a> () =
     let mutable (b:Parser<'a>) = Unchecked.defaultof<_>

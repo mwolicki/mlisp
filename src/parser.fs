@@ -10,31 +10,34 @@ module AST =
     | EId of Id
     | EList of Expr list
     | EQuotedList of Expr list
+    | ENop
 
 open AST
 
 let exprAction, expr = refl<Expr> ()
 
-let quotedListCall = betweenStr "'(" (sepBy spaces1 expr) ")" ==> EQuotedList
+let comment = spaces >-> pChar ';' <-< all(anyASCII)
 
-let listExpr = betweenChar '(' (sepBy spaces1 expr) ')' ==> EList
+let quotedListCall = spaces >-> betweenStr "'(" (sepBy spaces1 expr) ")" ==> EQuotedList
+
+let listExpr = spaces >-> betweenChar '(' (sepBy spaces1 expr) ')' ==> EList
 
 choice [ 
     pfloat ==> ENumber
     pChar '"' >-> anyStr <-< pChar '"' ==> EString >~> "EString"
     listExpr
+    listExpr <-< comment
     quotedListCall
+    comment ==> fun _ -> ENop    
     anyStr ==> (Id >> EId) >~> "EId"
 ] |> exprAction
-
-
-
 
 
 type RuntimeValue =
 | RNumber of float
 | RString of string
 | RUnit
+| RList of RuntimeValue list
 | RFunction of args : Id list * body : AST.Expr
 
 let (|RNumbers|_|) (exprs : Expr list) =
@@ -74,17 +77,21 @@ let rec evaluate (environment:Map<Id, RuntimeValue>) (ast:Expr) : RuntimeValue *
     | EId id when environment.ContainsKey id -> environment.[id], environment
     | EFunCall (Id "define", EId name :: [value]) -> RUnit, Map.add name (evaluate' environment value) environment
     | IsFuncDef (fname, func) -> RUnit, Map.add fname func environment    
-    | EFunCall (Id "+", EAllNumbers numbers) -> numbers |> List.reduce (+) |> RNumber, environment
-    | EFunCall (Id "-", EAllNumbers numbers) -> numbers |> List.reduce (-) |> RNumber, environment
-    | EFunCall (Id "*", EAllNumbers numbers) -> numbers |> List.reduce (*) |> RNumber, environment
-    | EFunCall (Id "/", EAllNumbers numbers) -> numbers |> List.reduce (/) |> RNumber, environment
+    | EFunCall (Id "+", EAllNumbers nums) -> nums |> List.reduce (+) |> RNumber, environment
+    | EFunCall (Id "-", EAllNumbers nums) -> nums |> List.reduce (-) |> RNumber, environment
+    | EFunCall (Id "*", EAllNumbers nums) -> nums |> List.reduce (*) |> RNumber, environment
+    | EFunCall (Id "/", EAllNumbers nums) -> nums |> List.reduce (/) |> RNumber, environment
+    | EFunCall (Id "^", EAllNumbers nums) -> nums |> List.reduce (fun a b -> System.Math.Pow(a,b)) |> RNumber, environment
+    | EFunCall (Id "log", [ENumber num]) -> log num |> RNumber, environment
+    | EFunCall (Id "log10", [ENumber num]) -> log10 num |> RNumber, environment
+    | EFunCall (Id "abs", EAllNumbers nums) -> nums |> List.map (abs >> RNumber) |> RList, environment    
     | EFunCall (IsFunCall (args, func), expr) when args.Length = expr.Length ->
         let environment = 
             expr |> List.map (evaluate' environment)
             |> List.zip args
             |> List.fold (fun environment (name, value) -> Map.add name value environment) environment
         evaluate environment func
-
+    | ENop -> RUnit, environment
     | x -> failwithf "Unsupported AST %A" x
 
 
@@ -94,6 +101,7 @@ let run (txt:string) =
         | Parsed (parsed, _) -> evaluate env parsed |> Ok
         | Failed (reason, _) -> Error reason
     txt.Replace("\r\n", "\n").Split([|'\n'|])
+    |> Array.filter (System.String.IsNullOrWhiteSpace >> not)
     |> Array.fold (fun env code -> 
         FSharp.Core.Result.bind (fun (value:RuntimeValue, env) -> printfn "%A" value; run code env) env) (Ok (RUnit, Map.empty))
 
@@ -103,7 +111,7 @@ let run (txt:string) =
 (add2 7)
 (define x (+ 1 2 3 (add2 10)))
 (define marcin "Marcin")
-(+ x)"""
+(abs 10)"""
 |> run
 
 
