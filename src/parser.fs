@@ -1,5 +1,6 @@
 module parser
 open mparsec
+open System
 
 type Id = Id of string
 
@@ -11,15 +12,20 @@ module AST =
     | EList of Expr list
     | EQuotedList of Expr list
     | ENop
+    
+    let rec tryRemoveNop = function
+    | EString _
+    | ENumber _
+    | EId _ as e -> e
+    | EList es -> List.map tryRemoveNop es |> List.choose (function ENop -> None | x -> Some x) |> EList
+    | EQuotedList es -> List.map tryRemoveNop es |> List.choose (function ENop -> None | x -> Some x) |> EQuotedList
+    | ENop -> ENop
 
 open AST
 
 let exprAction, expr = refl<Expr> ()
-
-let comment = spaces >-> pChar ';' <-< all(anyASCII)
-
+let comment = spaces >-> pChar ';' <-< all(anyASCII) <-< pChar '\n' >~> "comment"
 let quotedListCall = spaces >-> betweenStr "'(" (sepBy spaces1 expr) ")" ==> EQuotedList
-
 let listExpr = spaces >-> betweenChar '(' (sepBy spaces1 expr) ')' ==> EList
 
 choice [ 
@@ -32,13 +38,19 @@ choice [
     anyStr ==> (Id >> EId) >~> "EId"
 ] |> exprAction
 
-
 type RuntimeValue =
 | RNumber of float
 | RString of string
 | RUnit
 | RList of RuntimeValue list
 | RFunction of args : Id list * body : AST.Expr
+with override rv.ToString () =
+        match rv with
+        | RNumber v -> v.ToString ()
+        | RString s -> s
+        | RUnit -> "unit"
+        | RList rs -> "[" + (rs |> List.map (fun r -> r.ToString()) |>String.concat ", ") + "]"
+        | RFunction (args, _) -> "(@func " + (args |> List.map (fun (Id i) -> i) |> String.concat ", ") + ")"
 
 let (|RNumbers|_|) (exprs : Expr list) =
     if List.forall (function ENumber _ -> true | _ -> false) exprs then
@@ -92,26 +104,17 @@ let rec evaluate (environment:Map<Id, RuntimeValue>) (ast:Expr) : RuntimeValue *
             |> List.fold (fun environment (name, value) -> Map.add name value environment) environment
         evaluate environment func
     | ENop -> RUnit, environment
+    | EQuotedList es -> es |> List.mapFold (evaluate) environment |> fun (ps, environment) -> RList ps, environment
     | x -> failwithf "Unsupported AST %A" x
 
-
 let run (txt:string) = 
-    let run txt env =
-        match expr <!!> txt with
-        | Parsed (parsed, _) -> evaluate env parsed |> Ok
-        | Failed (reason, _) -> Error reason
-    txt.Replace("\r\n", "\n").Split([|'\n'|])
-    |> Array.filter (System.String.IsNullOrWhiteSpace >> not)
-    |> Array.fold (fun env code -> 
-        FSharp.Core.Result.bind (fun (value:RuntimeValue, env) -> printfn "%A" value; run code env) env) (Ok (RUnit, Map.empty))
-
-"""(define add2 z (+ 2 z))
-(define id i (+ 2 z))
-(add2 5)
-(add2 7)
-(define x (+ 1 2 3 (add2 10)))
-(define marcin "Marcin")
-(abs 10)"""
+    match all expr <!!> (txt + "\n") with
+    | Parsed (parsed, _) -> evaluate Map.empty (EQuotedList parsed |> AST.tryRemoveNop) |> Ok
+    | Failed (reason, _) -> Error reason
+    
+"""(define addTwoNumbers a b (+ a b)) ; da
+(define add2 z (addTwoNumbers 2 z))
+(define x (* 10 (+ 1 2 3 (add2 10))))
+(+ 1 2 (add2 5) x)"""
 |> run
-
 

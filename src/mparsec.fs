@@ -1,18 +1,15 @@
 module mparsec
-
 open System
 
 [<RequireQualifiedAccess>]
 module StringEx =
     type Position = int
     exception OutOfRangeException of string * index:Position
-
     [<StructuredFormatDisplay("\"{AsString}\"")>]
     type StringEx = private { str:string; index : Position }
     with 
         override s.ToString () = s.str.Substring s.index
         member m.AsString = m.ToString()
-
         member s.Length = s.str.Length - s.index
         member s.Position = s.index
         member s.Item with get (index) = s.str.[s.index + index]
@@ -20,10 +17,8 @@ module StringEx =
         member s.Substring (index:Position) = 
             if index <= s.Length then { s with index = s.index + index }
             else raise <| OutOfRangeException (s.ToString (), index)
-
     let toStringEx str = { str = str; index = 0 }
     let substring (s:StringEx) = s.Substring
-
     let startsWith (txt:string) (s:StringEx) = s.ToString().StartsWith (txt, System.StringComparison.OrdinalIgnoreCase)
 
 
@@ -76,7 +71,6 @@ type Parser<'u> =
 let (>~>) (p:Parser<'a>) name : Parser<'a> = { p with name = name }
 let parse (p:Parser<_>) txt = { Text = txt |> StringEx.toStringEx; Trampoline = Map.empty }  |> p.parser
 let (<!!>) p txt = parse p txt
-
 let getNames parsers = parsers |> List.map (fun x->x.name) |> String.concat ", "
 
 let pChar ch : Parser<_> =
@@ -94,7 +88,7 @@ let pString str : Parser<_> =
         let txt = status.Text
         if StringEx.startsWith str txt then Parsed (str, { status with Text = StringEx.substring txt str.Length })
         else Failed (sprintf "string doesnt start with '%s'" str, txt) }
-    
+
 let any (parsers: Parser<'a> list) : Parser<_> =
     let rec any (parsers: Parser<'a> list) status =
         match parsers with
@@ -113,11 +107,10 @@ let anyChar =
       id = System.Guid.NewGuid ()
       parser = fun txt -> (['*'..'z'] |> List.map pChar |> any).f txt }
 
-
 let anyASCII = 
     { name = "anyASCII"
       id = System.Guid.NewGuid ()
-      parser = fun txt -> ([char 0 .. char 127] |> List.map pChar |> any).f txt }
+      parser = fun txt -> ([char 32 .. char 127] |> List.map pChar |> any).f txt }
 
 let anyNumber = 
     { name = "anyNumber"
@@ -163,6 +156,7 @@ let (==>) (a:Parser<'a>) (map:'a->'b) =
     { name = sprintf "mapped-%s" a.name
       id = System.Guid.NewGuid ()
       parser = a.f >> Result.map map }
+
 let between a b a' : Parser<_> = a >-> b <-< a'
 let betweenChar a b a' = pChar a >-> b <-< pChar a'
 let betweenStr a b a' = pString a >-> b <-< pString a'
@@ -185,13 +179,16 @@ let sepByChar sep = sepBy (pChar sep)
 
 let anyStr = all anyChar ==> (Array.ofList >> System.String)
 
-let spaces1 = all (pChar ' ')
+let whitespace = [' '; '\t'; '\r'; '\n'] |> List.map pChar |> any >~> "whitespace"
+
+let spaces1 = all whitespace
+
 let spaces =
     { name = "spaces" 
       id = System.Guid.NewGuid ()
       parser = 
         fun status -> 
-            match (all (pChar ' ')).f status with
+            match (all whitespace).f status with
             | Parsed _ as p -> p
             | Failed _ -> Parsed ([], status)}
 
@@ -203,7 +200,6 @@ let refl<'a> () =
       id = System.Guid.NewGuid ()
       parser = 
         fun status -> c:=!c+1; if !c < 1000 then let r = b.f status in c:= !c-1; r else Failed ("stack-over-flow", status.Text)}
-
 
 let pfloat = 
     let parse (p:char list) = p |> Array.ofList |> System.String |> System.Convert.ToDouble
@@ -220,6 +216,3 @@ let pbool =
     choice [
         pString "true" ==> fun _ -> true
         pString "false" ==> fun _ -> false ] >~> "pbool"
-
-
-
