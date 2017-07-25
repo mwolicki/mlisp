@@ -7,6 +7,7 @@ type Id = Id of string
 module AST =
     type Expr =
     | EString of string
+    | EBool of bool
     | ENumber of float
     | EId of Id
     | EList of Expr list
@@ -16,6 +17,7 @@ module AST =
     let rec tryRemoveNop = function
     | EString _
     | ENumber _
+    | EBool _
     | EId _ as e -> e
     | EList es -> List.map tryRemoveNop es |> List.choose (function ENop -> None | x -> Some x) |> EList
     | EQuotedList es -> List.map tryRemoveNop es |> List.choose (function ENop -> None | x -> Some x) |> EQuotedList
@@ -30,6 +32,7 @@ let listExpr = spaces >-> betweenChar '(' (sepBy spaces1 expr) ')' ==> EList
 
 choice [ 
     pfloat ==> ENumber
+    pbool ==> EBool
     pChar '"' >-> anyStr <-< pChar '"' ==> EString >~> "EString"
     listExpr
     listExpr <-< comment
@@ -41,6 +44,7 @@ choice [
 type RuntimeValue =
 | RNumber of float
 | RString of string
+| RBool of bool
 | RUnit
 | RList of RuntimeValue list
 | RFunction of args : Id list * body : AST.Expr
@@ -48,6 +52,7 @@ with override rv.ToString () =
         match rv with
         | RNumber v -> v.ToString ()
         | RString s -> s
+        | RBool b -> b.ToString ()
         | RUnit -> "unit"
         | RList rs -> "[" + (rs |> List.map (fun r -> r.ToString()) |>String.concat ", ") + "]"
         | RFunction (args, _) -> "(@func " + (args |> List.map (fun (Id i) -> i) |> String.concat ", ") + ")"
@@ -88,6 +93,7 @@ let rec evaluate (environment:Map<Id, RuntimeValue>) (ast:Expr) : RuntimeValue *
     match ast with
     | ENumber n -> RNumber n, environment
     | EString s -> RString s, environment
+    | EBool b -> RBool b, environment
     | EId id when environment.ContainsKey id -> environment.[id], environment
     | EFunCall (Id "def", EId name :: [value])
     | EFunCall (Id "define", EId name :: [value]) -> RUnit, Map.add name (evaluate' environment value) environment
