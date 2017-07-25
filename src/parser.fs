@@ -77,6 +77,8 @@ let rec evaluate (environment:Map<Id, RuntimeValue>) (ast:Expr) : RuntimeValue *
         if List.forall (function RNumber _ -> true | _ -> false) evaluated then
             List.choose (function RNumber n -> Some n | _ -> None) evaluated |> Some
         else None
+
+    let (|Evaluated|) = List.map (evaluate' environment)
     
     let (|IsFunCall|_|) fname =
         match Map.tryFind fname environment with
@@ -87,6 +89,7 @@ let rec evaluate (environment:Map<Id, RuntimeValue>) (ast:Expr) : RuntimeValue *
     | ENumber n -> RNumber n, environment
     | EString s -> RString s, environment
     | EId id when environment.ContainsKey id -> environment.[id], environment
+    | EFunCall (Id "def", EId name :: [value])
     | EFunCall (Id "define", EId name :: [value]) -> RUnit, Map.add name (evaluate' environment value) environment
     | IsFuncDef (fname, func) -> RUnit, Map.add fname func environment    
     | EFunCall (Id "+", EAllNumbers nums) -> nums |> List.reduce (+) |> RNumber, environment
@@ -97,6 +100,9 @@ let rec evaluate (environment:Map<Id, RuntimeValue>) (ast:Expr) : RuntimeValue *
     | EFunCall (Id "log", [ENumber num]) -> log num |> RNumber, environment
     | EFunCall (Id "log10", [ENumber num]) -> log10 num |> RNumber, environment
     | EFunCall (Id "abs", EAllNumbers nums) -> nums |> List.map (abs >> RNumber) |> RList, environment    
+    | EFunCall (Id "hd", Evaluated [RList list]) -> list |> List.head, environment
+    | EFunCall (Id "tl", Evaluated [RList list]) -> list |> List.tail |> RList, environment
+    
     | EFunCall (IsFunCall (args, func), expr) when args.Length = expr.Length ->
         let environment = 
             expr |> List.map (evaluate' environment)
@@ -112,9 +118,9 @@ let run (txt:string) =
     | Parsed (parsed, _) -> evaluate Map.empty (EQuotedList parsed |> AST.tryRemoveNop) |> Ok
     | Failed (reason, _) -> Error reason
     
-"""(define addTwoNumbers a b (+ a b)) ; da
-(define add2 z (addTwoNumbers 2 z))
-(define x (* 10 (+ 1 2 3 (add2 10))))
-(+ 1 2 (add2 5) x)"""
+
+"""(define ll '(1 2 3 4))
+(tl ll)
+(hd ll)"""
 |> run
 
